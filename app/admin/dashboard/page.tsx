@@ -86,13 +86,14 @@ export default function AdminDashboard() {
         const weekMatches: Match[] = matchesRes.data || []
 
         // Fetch players
-        const playerIds = weekTeams
-          .flatMap((t) => [t.player1_id, t.player2_id])
-          .filter(Boolean)
+        // Fetch all subscribed players (for team editor dropdowns)
+        const allSubscribedIds = week.subscribed_player_ids || []
+        const teamPlayerIds = weekTeams.flatMap((t) => [t.player1_id, t.player2_id]).filter(Boolean)
+        const allPlayerIds = [...new Set([...allSubscribedIds, ...teamPlayerIds])]
 
         let weekPlayers: Player[] = []
-        if (playerIds.length > 0) {
-          const { data } = await supabase.from('players').select('*').in('id', playerIds)
+        if (allPlayerIds.length > 0) {
+          const { data } = await supabase.from('players').select('*').in('id', allPlayerIds)
           weekPlayers = data || []
         }
         setPlayers(weekPlayers)
@@ -391,26 +392,34 @@ export default function AdminDashboard() {
                   )}
 
                   {currentWeek.status === 'draft_done' && (
-                    <>
-                      <DraftPanel teams={teams} />
-                      <div className="flex flex-wrap gap-3 pt-2 border-t border-accent/10">
-                        <button
-                          onClick={handleRerunDraft}
-                          className="px-5 py-2 border border-accent/30 text-text rounded-lg text-sm hover:border-accent/60 transition-colors"
-                        >
-                          Re-run Draft
-                        </button>
-                        <button
-                          onClick={handleConfirmSchedule}
-                          className="px-5 py-2 bg-accent text-bg rounded-lg text-sm font-semibold hover:bg-accent/90 transition-colors"
-                        >
-                          Confirm Draft & Generate Schedule
-                        </button>
-                      </div>
-                    </>
+                    <div className="flex flex-wrap gap-3 pt-2 border-t border-accent/10">
+                      <button
+                        onClick={handleRerunDraft}
+                        className="px-5 py-2 border border-accent/30 text-text rounded-lg text-sm hover:border-accent/60 transition-colors"
+                      >
+                        Re-run Draft
+                      </button>
+                      <button
+                        onClick={handleConfirmSchedule}
+                        className="px-5 py-2 bg-accent text-bg rounded-lg text-sm font-semibold hover:bg-accent/90 transition-colors"
+                      >
+                        Confirm Draft & Generate Schedule
+                      </button>
+                    </div>
                   )}
 
-                  {(currentWeek.status === 'in_progress' || currentWeek.status === 'completed') && (
+                  {(currentWeek.status === 'draft_done' || currentWeek.status === 'in_progress') && (
+                    <TeamEditor
+                      teams={teams}
+                      allPlayers={players}
+                      weekPlayerIds={currentWeek.subscribed_player_ids || []}
+                      token={token}
+                      onSaved={() => { fetchData(); addToast('Teams updated!', 'success') }}
+                      onError={(msg) => addToast(msg, 'error')}
+                    />
+                  )}
+
+                  {currentWeek.status === 'completed' && (
                     <>
                       <p className="text-muted text-sm">
                         Draft confirmed. Schedule has been generated.
@@ -498,6 +507,163 @@ export default function AdminDashboard() {
       )}
 
       <Toast toasts={toasts} removeToast={removeToast} />
+    </div>
+  )
+}
+
+// ── Team Editor ──────────────────────────────────────────────────────────────
+function TeamEditor({
+  teams,
+  allPlayers,
+  weekPlayerIds,
+  token,
+  onSaved,
+  onError,
+}: {
+  teams: TeamWithPlayers[]
+  allPlayers: Player[]
+  weekPlayerIds: string[]
+  token: string
+  onSaved: () => void
+  onError: (msg: string) => void
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [selections, setSelections] = useState<Record<string, { p1: string; p2: string }>>({})
+  const [saving, setSaving] = useState(false)
+
+  const subscribedPlayers = allPlayers.filter((p) => weekPlayerIds.includes(p.id))
+
+  const startEdit = (team: TeamWithPlayers) => {
+    setEditingId(team.id)
+    setSelections((prev) => ({
+      ...prev,
+      [team.id]: {
+        p1: team.player1_id || '',
+        p2: team.player2_id || '',
+      },
+    }))
+  }
+
+  const cancelEdit = () => setEditingId(null)
+
+  const saveTeam = async (teamId: string) => {
+    const sel = selections[teamId]
+    if (!sel?.p1 || !sel?.p2) return onError('Select two players')
+    if (sel.p1 === sel.p2) return onError('A team must have two different players')
+
+    // Check no player is used in another team
+    const otherTeams = teams.filter((t) => t.id !== teamId)
+    const usedElsewhere = otherTeams.some(
+      (t) => t.player1_id === sel.p1 || t.player2_id === sel.p1 ||
+             t.player1_id === sel.p2 || t.player2_id === sel.p2
+    )
+    if (usedElsewhere) return onError('One of these players is already in another team')
+
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/teams/${teamId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ player1_id: sel.p1, player2_id: sel.p2 }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        onError(data.error || 'Failed to update team')
+      } else {
+        setEditingId(null)
+        onSaved()
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const TEAM_COLORS = [
+    'border-accent/30 bg-accent/5',
+    'border-gold/30 bg-gold/5',
+    'border-silver/30 bg-silver/5',
+    'border-bronze/30 bg-bronze/5',
+  ]
+
+  return (
+    <div className="space-y-3">
+      <p className="text-muted text-xs uppercase tracking-widest font-semibold">Teams — click Edit to swap players</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {teams.map((team, index) => {
+          const isEditing = editingId === team.id
+          const sel = selections[team.id]
+
+          return (
+            <div key={team.id} className={`rounded-lg border p-4 ${TEAM_COLORS[index % TEAM_COLORS.length]}`}>
+              {isEditing ? (
+                <div className="space-y-3">
+                  <p className="text-accent text-xs font-bold uppercase tracking-widest">Edit Team</p>
+                  <div className="space-y-2">
+                    {(['p1', 'p2'] as const).map((slot, i) => (
+                      <div key={slot} className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
+                        <select
+                          value={sel?.[slot] || ''}
+                          onChange={(e) =>
+                            setSelections((prev) => ({
+                              ...prev,
+                              [team.id]: { ...prev[team.id], [slot]: e.target.value },
+                            }))
+                          }
+                          className="flex-1 bg-bg border border-accent/20 rounded px-2 py-1.5 text-text text-sm focus:outline-none focus:border-accent/50"
+                        >
+                          <option value="">Select player...</option>
+                          {subscribedPlayers.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => saveTeam(team.id)}
+                      disabled={saving}
+                      className="px-3 py-1.5 bg-accent text-bg rounded text-xs font-semibold hover:bg-accent/90 transition-colors disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="px-3 py-1.5 border border-muted/30 text-muted rounded text-xs hover:border-muted/60 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-accent font-bold text-sm">{team.name}</span>
+                    <button
+                      onClick={() => startEdit(team)}
+                      className="text-xs border border-accent/30 text-accent rounded px-2 py-0.5 hover:bg-accent/10 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {[team.player1, team.player2].map((p, i) => p && (
+                      <div key={p.id} className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs flex items-center justify-center font-bold">{i + 1}</span>
+                        <span className="text-text text-sm">{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
