@@ -44,6 +44,25 @@ export default function SubscriptionList({
       })
   }, [playerIds])
 
+  // Fetch latest player IDs directly from the weeks table
+  const fetchLatestIds = async () => {
+    const { data } = await supabase
+      .from('weeks')
+      .select('subscribed_player_ids')
+      .eq('id', weekId)
+      .single()
+    if (data) {
+      const newIds: string[] = data.subscribed_player_ids || []
+      setPlayerIds((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(newIds)) {
+          onUpdate?.(newIds)
+          return newIds
+        }
+        return prev
+      })
+    }
+  }
+
   // Real-time subscription to weeks table
   useEffect(() => {
     const channel = supabase
@@ -64,8 +83,12 @@ export default function SubscriptionList({
       )
       .subscribe()
 
+    // Polling fallback every 3 seconds in case real-time is delayed
+    const poll = setInterval(fetchLatestIds, 3000)
+
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(poll)
     }
   }, [weekId, onUpdate])
 
