@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import Leaderboard from '@/components/Leaderboard'
 
-export const revalidate = 0
+export const dynamic = 'force-dynamic'
 
 async function getAllPlayers() {
   const { data: players } = await supabase

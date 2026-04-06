@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase'
 import type { Week, Team } from '@/lib/supabase'
 import Link from 'next/link'
 
+export const dynamic = 'force-dynamic'
+
 async function getCompletedWeeks() {
   const { data: weeks } = await supabase
     .from('weeks')

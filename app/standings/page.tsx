@@ -3,6 +3,8 @@ import type { Week, Team, Player } from '@/lib/supabase'
 import StandingsTable from '@/components/StandingsTable'
 import LiveBadge from '@/components/LiveBadge'
 
+export const dynamic = 'force-dynamic'
+
 async function getActiveWeekWithTeams() {
   const { data: weeks } = await supabase
     .from('weeks')

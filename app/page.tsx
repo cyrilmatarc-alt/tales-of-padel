@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase'
 import type { Week, Team, Match, Player } from '@/lib/supabase'
 import HomeClient from './HomeClient'
 
-export const revalidate = 0
+export const dynamic = 'force-dynamic'
 
 async function getActiveWeek() {
   const { data: weeks } = await supabase
