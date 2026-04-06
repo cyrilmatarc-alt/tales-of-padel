@@ -30,17 +30,18 @@ export default function RootLayout({
     <html lang="en" className={`${bebasNeue.variable} ${dmSans.variable} h-full`}>
       <body className="min-h-screen flex flex-col">
         <nav className="sticky top-0 z-40 bg-surface/95 backdrop-blur border-b border-accent/10">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
             <Link
               href="/"
-              className="font-display text-2xl text-accent tracking-widest hover:text-accent/80 transition-colors"
+              className="font-display text-accent tracking-widest hover:text-accent/80 transition-colors shrink-0 text-xl sm:text-2xl"
             >
-              TALES OF PADEL
+              <span className="sm:hidden">TOP</span>
+              <span className="hidden sm:inline">TALES OF PADEL</span>
             </Link>
-            <div className="flex items-center gap-1 sm:gap-4">
+            <div className="flex items-center gap-0 sm:gap-2">
               <NavLink href="/">Home</NavLink>
               <NavLink href="/standings">Standings</NavLink>
-              <NavLink href="/leaderboard">Leaderboard</NavLink>
+              <NavLink href="/leaderboard" mobileLabel="Board">Leaderboard</NavLink>
               <NavLink href="/history">History</NavLink>
               <NavLink href="/admin" className="text-muted hover:text-text">
                 Admin
@@ -61,17 +62,24 @@ function NavLink({
   href,
   children,
   className = '',
+  mobileLabel,
 }: {
   href: string
   children: React.ReactNode
   className?: string
+  mobileLabel?: string
 }) {
   return (
     <Link
       href={href}
-      className={`text-text/80 hover:text-accent transition-colors text-sm font-medium px-2 py-1 rounded hover:bg-accent/5 ${className}`}
+      className={`text-text/80 hover:text-accent transition-colors text-xs sm:text-sm font-medium px-1.5 sm:px-2 py-1 rounded hover:bg-accent/5 ${className}`}
     >
-      {children}
+      {mobileLabel ? (
+        <>
+          <span className="sm:hidden">{mobileLabel}</span>
+          <span className="hidden sm:inline">{children}</span>
+        </>
+      ) : children}
     </Link>
   )
 }
