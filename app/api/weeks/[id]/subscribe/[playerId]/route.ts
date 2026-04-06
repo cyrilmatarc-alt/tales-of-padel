@@ -50,5 +50,16 @@ export async function DELETE(
     return Response.json({ error: updateError.message }, { status: 500 })
   }
 
+  // Delete the player from the players table if they have no completed weeks (no real stats)
+  const { data: player } = await supabase
+    .from('players')
+    .select('total_weeks_played')
+    .eq('id', playerId)
+    .single()
+
+  if (player && player.total_weeks_played === 0) {
+    await supabase.from('players').delete().eq('id', playerId)
+  }
+
   return Response.json({ week: updatedWeek }, { status: 200 })
 }

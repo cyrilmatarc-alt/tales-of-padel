@@ -36,6 +36,8 @@ export async function POST(
     return Response.json({ error: 'Week is full (8 players max)' }, { status: 400 })
   }
 
+  const { confirmedPlayerId } = body as { confirmedPlayerId?: string }
+
   // Case-insensitive name match — find or create player
   const { data: existingPlayers, error: playerSearchError } = await supabase
     .from('players')
@@ -49,7 +51,26 @@ export async function POST(
     (p) => p.name.toLowerCase() === trimmedName.toLowerCase()
   )
 
-  if (!player) {
+  if (!player && !confirmedPlayerId) {
+    // Check for similar names among players who have played before
+    const knownPlayers = existingPlayers?.filter((p) => p.total_weeks_played > 0) || []
+    const input = trimmedName.toLowerCase()
+    const suggestions = knownPlayers.filter((p) => {
+      const existing = p.name.toLowerCase()
+      return (
+        existing.includes(input) ||
+        input.includes(existing) ||
+        existing.split(' ').some((word: string) => input.includes(word) && word.length > 2) ||
+        input.split(' ').some((word: string) => existing.includes(word) && word.length > 2)
+      )
+    })
+
+    if (suggestions.length > 0) {
+      return Response.json({ suggestions }, { status: 200 })
+    }
+  }
+
+  if (confirmedPlayerId === 'new' || (!player && !confirmedPlayerId)) {
     // Create new player
     const { data: newPlayer, error: createError } = await supabase
       .from('players')
@@ -61,6 +82,12 @@ export async function POST(
       return Response.json({ error: createError.message }, { status: 500 })
     }
     player = newPlayer
+  } else if (confirmedPlayerId && confirmedPlayerId !== 'new') {
+    // Use the confirmed existing player
+    player = existingPlayers?.find((p) => p.id === confirmedPlayerId)
+    if (!player) {
+      return Response.json({ error: 'Player not found' }, { status: 404 })
+    }
   }
 
   // Check if already subscribed

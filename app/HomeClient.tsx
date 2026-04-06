@@ -30,6 +30,8 @@ export default function HomeClient({ week, initialTeams, initialMatches, initial
   const [subscribing, setSubscribing] = useState(false)
   const [subscribeError, setSubscribeError] = useState('')
   const [subscribeSuccess, setSubscribeSuccess] = useState('')
+  const [suggestions, setSuggestions] = useState<Player[]>([])
+  const [pendingName, setPendingName] = useState('')
 
   // Enrich teams with player data
   const enrichTeams = (teams: Team[], players: Player[]): TeamWithPlayers[] =>
@@ -50,28 +52,32 @@ export default function HomeClient({ week, initialTeams, initialMatches, initial
   const teamsWithPlayers = enrichTeams(initialTeams, initialPlayers)
   const matchesWithTeams = enrichMatches(initialMatches, initialTeams)
 
-  const handleSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-
+  const doSubscribe = async (nameToUse: string, confirmedPlayerId?: string) => {
     setSubscribing(true)
     setSubscribeError('')
     setSubscribeSuccess('')
+    setSuggestions([])
 
     try {
       const res = await fetch(`/api/weeks/${week.id}/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({ name: nameToUse, confirmedPlayerId }),
       })
 
       const data = await res.json()
 
       if (!res.ok) {
         setSubscribeError(data.error || 'Failed to subscribe')
+      } else if (data.suggestions) {
+        // Server found similar existing players — ask user to confirm
+        setSuggestions(data.suggestions)
+        setPendingName(nameToUse)
+        setName('')
       } else {
         setSubscribeSuccess(`${data.player.name} has been registered!`)
         setName('')
+        setPendingName('')
         setTimeout(() => setSubscribeSuccess(''), 4000)
       }
     } catch {
@@ -79,6 +85,12 @@ export default function HomeClient({ week, initialTeams, initialMatches, initial
     } finally {
       setSubscribing(false)
     }
+  }
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    await doSubscribe(name.trim())
   }
 
   const statusLabel: Record<Week['status'], string> = {
@@ -148,6 +160,32 @@ export default function HomeClient({ week, initialTeams, initialMatches, initial
           )}
           {subscribeSuccess && (
             <p className="text-accent text-sm mt-2">{subscribeSuccess}</p>
+          )}
+
+          {/* Name matching suggestions */}
+          {suggestions.length > 0 && (
+            <div className="mt-4 p-4 bg-bg rounded-lg border border-gold/30">
+              <p className="text-gold text-sm font-semibold mb-3">
+                Are you one of these players?
+              </p>
+              <div className="flex flex-col gap-2">
+                {suggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => doSubscribe(s.name, s.id)}
+                    className="text-left px-4 py-2 bg-surface border border-accent/20 rounded-lg text-text text-sm hover:border-accent/60 transition-colors"
+                  >
+                    Yes, I am <span className="text-accent font-semibold">{s.name}</span>
+                  </button>
+                ))}
+                <button
+                  onClick={() => doSubscribe(pendingName, 'new')}
+                  className="text-left px-4 py-2 bg-surface border border-muted/20 rounded-lg text-muted text-sm hover:border-muted/50 transition-colors"
+                >
+                  No, I am a new player
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
