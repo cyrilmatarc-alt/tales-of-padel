@@ -39,13 +39,19 @@ export async function POST(req: NextRequest) {
 
   const weekNumber = lastError || !lastWeek ? 1 : lastWeek.week_number + 1
 
-  const today = new Date().toISOString().split('T')[0]
+  // Always set the week date to the next upcoming Tuesday
+  const now = new Date()
+  const day = now.getDay() // 0=Sun, 1=Mon, 2=Tue, ...
+  const daysUntilTuesday = day === 2 ? 7 : (2 - day + 7) % 7 || 7
+  const nextTuesday = new Date(now)
+  nextTuesday.setDate(now.getDate() + daysUntilTuesday)
+  const weekDate = nextTuesday.toISOString().split('T')[0]
 
   const { data: newWeek, error: createError } = await supabase
     .from('weeks')
     .insert({
       week_number: weekNumber,
-      date: today,
+      date: weekDate,
       status: 'open_registration',
       subscribed_player_ids: [],
     })
