@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase'
 import type { Week, Team, Match, Player } from '@/lib/supabase'
 import HomeClient from './HomeClient'
 
+export const revalidate = 0
+
 async function getActiveWeek() {
   const { data: weeks } = await supabase
     .from('weeks')

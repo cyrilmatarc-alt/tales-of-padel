@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase'
 import Leaderboard from '@/components/Leaderboard'
 
+export const revalidate = 0
+
 async function getAllPlayers() {
   const { data: players } = await supabase
     .from('players')

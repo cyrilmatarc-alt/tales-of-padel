@@ -116,7 +116,7 @@ export default function HomeClient({ week, initialTeams, initialMatches, initial
             WEEK {week.week_number}
           </h1>
           <p className="text-muted text-sm mt-1">
-            {new Date(week.date).toLocaleDateString('en-US', {
+            {new Date(week.date + 'T12:00:00').toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
